@@ -51,4 +51,35 @@ class PrometheusExporterTest < Minitest::Test
     summary_metric = client.register(:summary, 'summary_metric', 'helping', expected_quantiles)
     assert_equal(expected_quantiles, summary_metric.standard_values('value', 'key')[:opts])
   end
+
+  def test_internal_state_broken
+    # start prometheus server for the client
+    server = PrometheusExporter::Server::Runner.new(bind: '0.0.0.0', port: 9394).start
+
+    # register a metrics for testing
+    client = PrometheusExporter::Client.new
+    counter_metric = client.register(:counter, 'counter_metric', 'helping')
+
+    # the internal worker thread will establish the connection to the server
+    counter_metric.increment('counter_metric')
+
+    # wait for thread working
+    sleep(1)
+
+    # Reproduce the state of the instance after process fork (race condition).
+    client.instance_variable_set('@socket_started', nil)
+    Thread.kill(client.instance_variable_get('@worker_thread').kill)
+
+    # wait for thread working
+    sleep(1)
+
+    # the internal worker thread will be created and try to send the metrics
+    counter_metric.increment('counter_metric')
+    sleep(1)
+
+    # the internal worker thread should not crash.
+    assert_equal(client.instance_variable_get('@worker_thread').alive?, true)
+
+    server.kill
+  end
 end

@@ -166,9 +166,12 @@ module PrometheusExporter
 
     def worker_loop
       close_socket_if_old!
-      process_queue
-    rescue => e
-      STDERR.puts "Prometheus Exporter, failed to send message #{e}"
+
+      begin
+        process_queue
+      rescue => e
+        STDERR.puts "Prometheus Exporter, failed to send message #{e}"
+      end
     end
 
     def ensure_worker_thread!
